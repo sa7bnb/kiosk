@@ -1,6 +1,6 @@
 # Kiosk – Raspberry Pi web kiosk
 
-Turns a Raspberry Pi 3/4 into a web kiosk: Chromium starts automatically in fullscreen at boot, with no mouse pointer, tabs or address bar, and shows a single web page.
+Turns a Raspberry Pi 3/4/5 into a web kiosk: Chromium starts automatically in fullscreen at boot, with no mouse pointer, tabs or address bar, and shows a single web page.
 
 The first time the device starts, it shows a simple settings page where you choose which web page to display. When you save, the device reboots and shows only the chosen page. The settings live in a separate `config.json`, so you can change them over SSH later.
 
@@ -13,7 +13,7 @@ The first time the device starts, it shows a simple settings page where you choo
 
 ## Requirements
 
-- Raspberry Pi 3/4
+- Raspberry Pi 3/4/5
 - microSD card or USB (8 GB or larger)
 - Screen with HDMI
 - Network via Wi-Fi or Ethernet
@@ -25,7 +25,13 @@ The first time the device starts, it shows a simple settings page where you choo
 
 Install **Raspberry Pi OS Lite (64-bit)** on the SD card with [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
 
-Choose *Raspberry Pi OS Lite (64-bit)* and click **Edit Settings** (OS customisation) before writing the card. Configure:
+In Imager, select:
+
+1. **Raspberry Pi Device:** Raspberry Pi 4
+2. **Operating System:** choose **Raspberry Pi OS (other)**, then **Raspberry Pi OS Lite (64-bit)**. The Lite version is listed under "other" and has no desktop, which is what you want here.
+3. **Storage:** your microSD card or USB
+
+Click **Edit Settings** (OS customisation) before writing the card. Configure:
 
 | Setting | Value |
 |---|---|
