@@ -42,7 +42,13 @@ from urllib.parse import parse_qs, urlparse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(BASE, "config.json")
-DEFAULTS = {"url": "", "webserver_enabled": 1, "port": 8080}
+DEFAULTS = {"url": "", "webserver_enabled": 1, "port": 8080, "rotation": 0}
+ROTATIONS = [
+    (0, "0° (normal)"),
+    (90, "90° (clockwise)"),
+    (180, "180° (upside down)"),
+    (270, "270° (counter-clockwise)"),
+]
 
 
 def load():
@@ -61,6 +67,13 @@ def save(cfg):
         json.dump(cfg, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(tmp, CONFIG)
+
+
+def get_rotation(cfg):
+    try:
+        return int(cfg.get("rotation", 0)) % 360
+    except (TypeError, ValueError):
+        return 0
 
 
 def normalize_url(raw):
@@ -101,6 +114,9 @@ PAGE = """<!doctype html>
  h1{{margin-top:0;font-size:1.5rem}}
  input[type=text]{{width:100%;box-sizing:border-box;padding:.8rem;font-size:1.1rem;border-radius:6px;
       border:1px solid #555;background:#111;color:#fff}}
+ label{{display:block;margin-top:1rem;margin-bottom:.3rem}}
+ select{{width:100%;box-sizing:border-box;padding:.8rem;font-size:1.1rem;border-radius:6px;
+      border:1px solid #555;background:#111;color:#fff}}
  button{{margin-top:1rem;padding:.8rem 1.6rem;font-size:1.1rem;border:0;border-radius:6px;
       background:#2f7de1;color:#fff;cursor:pointer}}
  .muted{{color:#999;font-size:.9rem}} .err{{color:#ff7b7b}} .ok{{color:#7bff9b}}
@@ -108,7 +124,10 @@ PAGE = """<!doctype html>
 <h1>Choose page to display</h1>
 {message}
 <form method="post" action="/save">
- <input type="text" name="url" value="{url}" placeholder="e.g. https://example.com" autofocus>
+ <label for="url">Web page address</label>
+ <input type="text" id="url" name="url" value="{url}" placeholder="e.g. https://example.com" autofocus>
+ <label for="rotation">Screen rotation</label>
+ <select id="rotation" name="rotation">{rotation_options}</select>
  <button type="submit">Save and restart</button>
 </form>
 <p class="muted">The device will reboot and then show only the chosen page.
@@ -127,13 +146,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _page(self, message="", url=None, code=200):
+    def _page(self, message="", url=None, rotation=None, code=200):
         cfg = load()
         port = cfg["port"]
         addrs = ", ".join(f"http://{ip}:{port}" for ip in local_ips()) or "(no IP address found)"
+        selected = get_rotation(cfg) if rotation is None else rotation
+        options = "".join(
+            f'<option value="{value}"{" selected" if value == selected else ""}>{label}</option>'
+            for value, label in ROTATIONS
+        )
         self._send(PAGE.format(
             message=message,
             url=html.escape(cfg["url"] if url is None else url, quote=True),
+            rotation_options=options,
             addrs=html.escape(addrs),
         ), code)
 
@@ -146,11 +171,19 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0) or 0)
         form = parse_qs(self.rfile.read(min(length, 8192)).decode("utf-8", "replace"))
         raw = form.get("url", [""])[0]
+        try:
+            rotation = int(form.get("rotation", ["0"])[0]) % 360
+        except ValueError:
+            rotation = 0
+        if rotation not in (0, 90, 180, 270):
+            rotation = 0
         url = normalize_url(raw)
         if not url:
-            return self._page('<p class="err">Invalid address. Enter an http(s) address.</p>', url=raw, code=400)
+            return self._page('<p class="err">Invalid address. Enter an http(s) address.</p>',
+                              url=raw, rotation=rotation, code=400)
         cfg = load()
         cfg["url"] = url
+        cfg["rotation"] = rotation
         cfg["webserver_enabled"] = 0
         save(cfg)
         self._send('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;'
@@ -186,6 +219,23 @@ BASE="$(cd "$(dirname "$0")" && pwd)"
 xset s off
 xset -dpms
 xset s noblank
+
+# Rotate the screen according to "rotation" in config.json (0, 90, 180 or 270)
+ROTATION="$(python3 -c 'import json, sys
+try:
+    print(int(json.load(open(sys.argv[1])).get("rotation", 0)) % 360)
+except Exception:
+    print(0)' "$BASE/config.json")"
+case "$ROTATION" in
+  90)  XR_ROTATE=right ;;
+  180) XR_ROTATE=inverted ;;
+  270) XR_ROTATE=left ;;
+  *)   XR_ROTATE=normal ;;
+esac
+if [ "$XR_ROTATE" != "normal" ]; then
+  XR_OUTPUT="$(xrandr 2>/dev/null | awk '/ connected/ {print $1; exit}')"
+  [ -n "$XR_OUTPUT" ] && xrandr --output "$XR_OUTPUT" --rotate "$XR_ROTATE"
+fi
 
 # Read config.json, pick the target URL and wait for network/server
 TARGET="$(python3 - "$BASE/config.json" <<'EOF'
@@ -252,10 +302,30 @@ if [ ! -f "$DEST/config.json" ]; then
 {
   "url": "",
   "webserver_enabled": 1,
-  "port": 8080
+  "port": 8080,
+  "rotation": 0
 }
 KIOSK_CFG_EOF
 fi
+
+# Add any setting missing from an existing config.json (existing values are kept)
+python3 - "$DEST/config.json" <<'KIOSK_MERGE_EOF'
+import json, sys
+
+path = sys.argv[1]
+defaults = {"url": "", "webserver_enabled": 1, "port": 8080, "rotation": 0}
+try:
+    with open(path, encoding="utf-8") as f:
+        cfg = json.load(f)
+except Exception:
+    sys.exit(0)  # leave an unreadable file untouched
+missing = {k: v for k, v in defaults.items() if k not in cfg}
+if missing:
+    cfg.update(missing)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+KIOSK_MERGE_EOF
 
 chmod +x "$DEST/server.py" "$DEST/kiosk.sh"
 
