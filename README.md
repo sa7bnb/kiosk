@@ -13,8 +13,8 @@ The first time the device starts, it shows a simple settings page where you choo
 
 ## Requirements
 
-- Raspberry Pi 3/4/5
-- microSD card or USB (8 GB or larger)
+- Raspberry Pi 3/4/5 
+- microSD card (8 GB or larger)
 - Screen with HDMI
 - Network via Wi-Fi or Ethernet
 - Another computer for installing and administering over SSH
@@ -29,7 +29,7 @@ In Imager, select:
 
 1. **Raspberry Pi Device:** Raspberry Pi 4
 2. **Operating System:** choose **Raspberry Pi OS (other)**, then **Raspberry Pi OS Lite (64-bit)**. The Lite version is listed under "other" and has no desktop, which is what you want here.
-3. **Storage:** your microSD card or USB
+3. **Storage:** your microSD card
 
 Click **Edit Settings** (OS customisation) before writing the card. Configure:
 
@@ -94,8 +94,9 @@ After the reboot, the screen shows the settings page. Choose your page from anot
 
 1. Open **`http://kiosk.local:8080`** in a browser on another computer on the same network. If the name does not resolve, use the device's IP address, for example `http://192.168.1.50:8080`. The address is also shown at the bottom of the settings page on the kiosk screen.
 2. Enter the address you want to display, for example `https://example.com`. If you type only `example.com`, the page adds `http://` for you.
-3. Click **Save and restart**.
-4. The device saves the address in `config.json`, turns off the web server and reboots. After a minute or so, the chosen page is shown in fullscreen.
+3. Choose the **screen rotation**: 0°, 90° (clockwise), 180° (upside down) or 270° (counter-clockwise).
+4. Click **Save and restart**.
+5. The device saves the address and rotation in `config.json`, turns off the web server and reboots. After a minute or so, the chosen page is shown in fullscreen, rotated as chosen.
 
 Once you have saved, the settings page is turned off, so `kiosk.local:8080` no longer responds. This is intentional.
 
@@ -119,7 +120,8 @@ With a page selected, it looks like this:
 {
   "url": "https://example.com",
   "webserver_enabled": 0,
-  "port": 8080
+  "port": 8080,
+  "rotation": 0
 }
 ```
 
@@ -128,6 +130,7 @@ With a page selected, it looks like this:
 | `url` | The page to display. If empty, the settings page is shown instead. |
 | `webserver_enabled` | `1` = the settings page is available, `0` = it is turned off. Set to `0` automatically when you save a URL. |
 | `port` | Port for the settings page (default `8080`). |
+| `rotation` | Screen rotation in degrees clockwise: `0`, `90`, `180` or `270` (default `0`). Applied at startup, so reboot after changing it. |
 
 **Option A: change the URL directly**
 
@@ -147,6 +150,7 @@ With a page selected, it looks like this:
 - If `url` is empty (`""`), the settings page always starts, even if `webserver_enabled` is `0`. You cannot lock yourself out.
 - The file must be valid JSON: the address goes inside quotes, and there must be no missing or extra commas. If the file is broken, the device falls back to the defaults and shows the settings page.
 - You can change `port` if 8080 is already in use. It only applies to the settings page.
+- `rotation` is a number without quotes. `360` counts as `0`, and any other value than 0, 90, 180 or 270 means no rotation.
 
 ## Automatic updates
 
